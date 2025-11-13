@@ -414,12 +414,16 @@ class APIClient:
         )
 
     def create_source_insight(
-        self, source_id: str, transformation_id: str, model_id: Optional[str] = None
+        self, source_id: str, transformation_id: str, response_language: str, model_id: Optional[str] = None
     ) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
         """Create a new insight for a source by running a transformation."""
         data = {"transformation_id": transformation_id}
         if model_id:
             data["model_id"] = model_id
+        if response_language:
+            data["response_language"] = response_language
+        else:
+            data["response_language"] = "English"
         return self._make_request(
             "POST", f"/api/sources/{source_id}/insights", json=data
         )

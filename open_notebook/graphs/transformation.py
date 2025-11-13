@@ -15,6 +15,7 @@ class TransformationState(TypedDict):
     source: Source
     transformation: Transformation
     output: str
+    response_language: str
 
 
 async def run_transformation(state: dict, config: RunnableConfig) -> dict:
@@ -29,9 +30,9 @@ async def run_transformation(state: dict, config: RunnableConfig) -> dict:
     default_prompts: DefaultPrompts = DefaultPrompts(transformation_instructions=None)
     if default_prompts.transformation_instructions:
         transformation_template_text = f"{default_prompts.transformation_instructions}\n\n{transformation_template_text}"
-
-    transformation_template_text = f"{transformation_template_text}\n\n# INPUT"
-
+    response_language = state.get("response_language")
+    language_prompt = f"\n\n# LANGUAGE REQUIREMENT\nAlways respond in {response_language}. Do not use any other language."
+    transformation_template_text = f"{transformation_template_text}{language_prompt}\n\n# INPUT"
     system_prompt = Prompter(template_text=transformation_template_text).render(
         data=state
     )
