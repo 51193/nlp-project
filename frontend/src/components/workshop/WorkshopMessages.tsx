@@ -5,7 +5,7 @@ import { WorkshopSession, AgentInfo, AgentMessage } from '@/lib/types/workshop'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Loader2, Wrench, FileText, ChevronDown, ChevronUp } from 'lucide-react'
+import { Loader2, Wrench, ChevronDown, ChevronUp } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { useTypewriter } from '@/lib/hooks/use-typewriter'
 import {
@@ -294,18 +294,223 @@ function ToolCallDisplay({ toolCall }: { toolCall: { tool: string; input: unknow
  */
 function IntegratorJsonView({ jsonContent }: { jsonContent: string }) {
   try {
+    // 检查JSON是否完整（流式传输中可能只接收了部分内容）
+    const hasJsonCodeBlock = jsonContent.includes('```json')
+    const hasClosingCodeBlock = jsonContent.includes('```', jsonContent.indexOf('```json') + 7)
+
+    // 如果有开始标记但没有结束标记，说明还在接收中
+    if (hasJsonCodeBlock && !hasClosingCodeBlock) {
+      return (
+        <div className="flex items-center gap-2 text-muted-foreground py-4">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Receiving integration result...</span>
+        </div>
+      )
+    }
+
+    // 对于纯JSON（无代码块），检查关键字段是否都存在
+    if (!hasJsonCodeBlock && jsonContent.includes('"top_ideas"')) {
+      // 检查是否包含结尾的关键字段（说明JSON可能完整了）
+      const hasEndFields = jsonContent.includes('"priority_reasoning"') ||
+                           jsonContent.includes('"recommended_priority"')
+
+      // 简单的括号匹配检查
+      const openBraces = (jsonContent.match(/\{/g) || []).length
+      const closeBraces = (jsonContent.match(/\}/g) || []).length
+
+      // 如果括号不匹配或缺少结尾字段，可能还在接收中
+      if (!hasEndFields || openBraces > closeBraces) {
+        return (
+          <div className="flex items-center gap-2 text-muted-foreground py-4">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Receiving integration result...</span>
+          </div>
+        )
+      }
+    }
+
     // 提取JSON代码块 (支持```json```格式或纯JSON)
-    let jsonMatch = jsonContent.match(/```json\s*(\{[\s\S]*?\})\s*```/) ||
+    const jsonMatch = jsonContent.match(/```json\s*([\s\S]*?)\s*```/) ||
                     jsonContent.match(/(\{[\s\S]*"top_ideas"[\s\S]*\})/)
 
     if (jsonMatch) {
-      // 清理JSON字符串（移除可能的trailing commas等）
-      let jsonStr = jsonMatch[1]
-        .replace(/,\s*}/g, '}')  // 移除对象中的trailing comma
-        .replace(/,\s*]/g, ']')  // 移除数组中的trailing comma
+      const originalJsonStr = jsonMatch[1]
+      console.log('[IntegratorJsonView] Parsing JSON response...')
+
+      // 多步骤清理JSON字符串
+      // 步骤1: 移除 trailing commas (更激进的策略)
+      let jsonStr = originalJsonStr
+        .replace(/,(\s*[}\]])/g, '$1')
+        .replace(/,(\s*\n\s*[}\]])/g, '$1')
+        // 移除数组/对象最后一个元素后的逗号
+        .replace(/,(\s*)\]/g, '$1]')
+        .replace(/,(\s*)\}/g, '$1}')
         .trim()
 
-      const parsed = JSON.parse(jsonStr)
+      // 步骤2: 使用更智能的状态机修复字符串中的问题
+      // - 转义未转义的换行符
+      // - 转义未转义的引号
+      // - 转义未转义的反斜杠
+      let inString = false
+      let escaped = false
+      let fixed = ''
+
+      for (let i = 0; i < jsonStr.length; i++) {
+        const char = jsonStr[i]
+
+        if (escaped) {
+          // 前一个字符是反斜杠，当前字符是转义序列的一部分
+          // 验证是否是有效的转义序列
+          if (char === 'n' || char === 'r' || char === 't' || char === '"' || char === '\\' || char === '/') {
+            fixed += char
+          } else {
+            // 无效转义，保留原样
+            fixed += char
+          }
+          escaped = false
+          continue
+        }
+
+        if (char === '\\') {
+          // 遇到反斜杠，标记下一个字符为转义
+          fixed += char
+          escaped = true
+          continue
+        }
+
+        if (char === '"') {
+          // 遇到引号，切换字符串状态
+          inString = !inString
+          fixed += char
+          continue
+        }
+
+        // 如果在字符串内部，转义特殊字符
+        if (inString) {
+          if (char === '\n') {
+            fixed += '\\n'
+          } else if (char === '\r') {
+            fixed += '\\r'
+          } else if (char === '\t') {
+            fixed += '\\t'
+          } else if (char === '\b') {
+            fixed += '\\b'
+          } else if (char === '\f') {
+            fixed += '\\f'
+          } else {
+            fixed += char
+          }
+        } else {
+          fixed += char
+        }
+      }
+
+      jsonStr = fixed
+
+      let parsed
+      let parseSuccess = false
+      let lastError: unknown = null
+
+      // 第一次尝试：直接解析
+      try {
+        parsed = JSON.parse(jsonStr)
+        parseSuccess = true
+        console.log('✅ JSON parsed successfully on first try')
+      } catch (parseError) {
+        lastError = parseError
+        console.log('⚠️ First parse attempt failed, trying repair strategies...')
+
+        // 第二次尝试：激进修复策略
+        try {
+          const lines = jsonStr.split('\n')
+          console.log(`📝 Attempting repair on ${lines.length} lines of JSON...`)
+
+          // 找出错误位置的上下文（仅用于调试，不触发错误）
+          const errorMatch = parseError instanceof Error ?
+            parseError.message.match(/position (\d+)/) : null
+          const errorPos = errorMatch ? parseInt(errorMatch[1]) : null
+
+          if (errorPos !== null) {
+            console.log('🔍 Error context:', {
+              position: errorPos,
+              before: jsonStr.substring(Math.max(0, errorPos - 50), errorPos),
+              at: jsonStr.substring(errorPos, Math.min(jsonStr.length, errorPos + 50))
+            })
+          }
+
+          // 应用修复策略
+          const aggressivelyFixedStr = jsonStr
+            .replace(/,(\s*[}\]])/g, '$1')
+            .replace(/,(\s*\n\s*[}\]])/g, '$1')
+            .replace(/,\s*,/g, ',')
+            .replace(/\/\/.*$/gm, '')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/\[\s*,/g, '[')
+            .replace(/,\s*,\s*\]/g, ']')
+
+          parsed = JSON.parse(aggressivelyFixedStr)
+          parseSuccess = true
+          console.log('✅ JSON parsed successfully after repair (second try)')
+        } catch (retryError) {
+          lastError = retryError
+          console.log('⚠️ Second parse attempt failed, trying field extraction...')
+
+          // 第三次尝试：字段提取重建
+          try {
+            const topIdeasMatch = jsonStr.match(/"top_ideas"\s*:\s*\[([\s\S]*?)\](?:\s*,\s*"recommended_priority"|$)/);
+
+            if (topIdeasMatch) {
+              const topIdeasContent = topIdeasMatch[1];
+              const reconstructed = `{"top_ideas":[${topIdeasContent}],"recommended_priority":[1,2,3],"priority_reasoning":"Extracted from malformed response"}`;
+
+              parsed = JSON.parse(reconstructed);
+              parseSuccess = true
+              console.log('✅ JSON parsed successfully via field extraction (third try)');
+            } else {
+              throw new Error('Could not extract top_ideas array');
+            }
+          } catch (finalError) {
+            lastError = finalError
+            // 所有尝试都失败了，现在才真正报错
+            console.error('❌ All JSON parsing attempts failed:', {
+              originalError: parseError instanceof Error ? parseError.message : String(parseError),
+              finalError: finalError instanceof Error ? finalError.message : String(finalError)
+            });
+
+            // 如果仍然解析失败，返回原始内容并显示详细错误
+            return (
+              <div className="space-y-2">
+                <div className="text-sm text-yellow-600 font-medium">⚠️ Unable to parse integration result</div>
+                <div className="text-xs text-muted-foreground mb-2">
+                  Error: {lastError instanceof Error ? lastError.message : String(lastError)}
+                </div>
+                <div className="text-xs text-muted-foreground mb-2 bg-amber-50 dark:bg-amber-950 p-2 rounded">
+                  💡 Tip: The AI may have generated malformed JSON. Check the console for detailed error logs.
+                </div>
+                <details className="text-xs">
+                  <summary className="cursor-pointer font-medium hover:underline mb-2">
+                    Show raw JSON (debug)
+                  </summary>
+                  <pre className="whitespace-pre-wrap text-xs bg-muted p-3 rounded overflow-x-auto max-h-96">
+                    {jsonContent}
+                  </pre>
+                </details>
+              </div>
+            )
+          }
+        }
+      }
+
+      // 如果解析失败且没有返回错误UI，这里不应该到达
+      if (!parseSuccess || !parsed) {
+        console.error('❌ Unexpected state: parsing failed but no error UI returned')
+        return (
+          <div className="text-sm text-red-600">
+            Unexpected error parsing integration result
+          </div>
+        )
+      }
+
       const topIdeas = parsed.top_ideas || []
 
       // 边框颜色映射
@@ -326,7 +531,20 @@ function IntegratorJsonView({ jsonContent }: { jsonContent: string }) {
         <div className="space-y-4">
           <div className="font-semibold text-base mb-3">🎯 Top 3 Integrated Ideas</div>
 
-          {topIdeas.map((idea: any, idx: number) => (
+          {topIdeas.map((idea: {
+        rank: number;
+        title: string;
+        description: string;
+        innovation_score: number;
+        feasibility_score: number;
+        impact_score: number;
+        risk_level: string;
+        sources: string[];
+        evidence: string;
+        implementation_steps: string[];
+        risks: string[];
+        mitigation: string[];
+      }, idx: number) => (
             <Card
               key={idx}
               className="border-l-4"
@@ -430,12 +648,28 @@ function IntegratorJsonView({ jsonContent }: { jsonContent: string }) {
         </div>
       )
     }
-  } catch (e) {
-    // JSON解析失败，返回null使用默认渲染
-    console.error('Failed to parse integrator JSON:', e)
-  }
 
-  return null
+    // 如果没有匹配到JSON，返回原始文本
+    return (
+      <div className="space-y-2">
+        <div className="text-sm text-muted-foreground">Integration Result:</div>
+        <pre className="whitespace-pre-wrap text-sm bg-muted p-3 rounded">
+          {jsonContent}
+        </pre>
+      </div>
+    )
+  } catch (e) {
+    // 捕获任何未预期的错误
+    console.error('Unexpected error in IntegratorJsonView:', e)
+    return (
+      <div className="space-y-2">
+        <div className="text-sm text-red-600 font-medium">❌ Error displaying integration result</div>
+        <pre className="whitespace-pre-wrap text-sm bg-muted p-3 rounded overflow-x-auto">
+          {jsonContent}
+        </pre>
+      </div>
+    )
+  }
 }
 
 /**
@@ -697,7 +931,7 @@ export function WorkshopMessages({
           {isStreaming && (
             <div className="flex items-center justify-center gap-2 text-muted-foreground py-4">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Streaming discussion in real-time...</span>
+              <span className="text-sm">Streaming discussion ...</span>
             </div>
           )}
 
