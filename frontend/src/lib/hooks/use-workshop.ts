@@ -14,6 +14,7 @@ import {
   pollSessionUntilComplete
 } from '@/lib/api/workshop'
 import { toast } from 'sonner'
+import { getApiUrl } from '@/lib/config'
 
 interface UseWorkshopOptions {
   notebookId: string
@@ -200,8 +201,12 @@ export function useWorkshop({ notebookId, autoStart = true, useStreaming = true 
         const abortController = new AbortController()
         abortControllerRef.current = abortController
 
+        // 获取动态API URL（支持localhost和远程访问）
+        const apiUrl = await getApiUrl()
+        console.log('[Workshop] Using API URL for streaming:', apiUrl)
+
         // 直接连接后端，绕过 Next.js 代理以避免 SSE 缓冲问题
-        const response = await fetch('http://localhost:5055/api/workshops/sessions/stream', {
+        const response = await fetch(`${apiUrl}/api/workshops/sessions/stream`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
