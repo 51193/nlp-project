@@ -154,6 +154,30 @@ export function useWorkshop({ notebookId, autoStart = true, useStreaming = true 
     setIsPolling(false)
   }, [])
 
+  // -------------------- SSE流式控制 --------------------
+  const stopStreaming = useCallback(() => {
+    console.log('[Workshop] Stopping streaming and cleaning up...')
+
+    // 中断fetch请求
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+      console.log('[Workshop] Aborted fetch request')
+    }
+
+    // 关闭EventSource连接
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+      console.log('[Workshop] Closed EventSource connection')
+    }
+
+    // 清理状态
+    setIsStreaming(false)
+    setStreamingMessages(new Map())
+    console.log('[Workshop] Cleanup complete')
+  }, [])
+
   // -------------------- SSE流式方法 --------------------
   const createSessionWithStreaming = useCallback(
     async (mode: string, topic: string, context?: Record<string, unknown>) => {
@@ -375,29 +399,6 @@ export function useWorkshop({ notebookId, autoStart = true, useStreaming = true 
     },
     [notebookId, queryClient, refetchSessions, startPolling, currentSessionId, stopStreaming]
   )
-
-  const stopStreaming = useCallback(() => {
-    console.log('[Workshop] Stopping streaming and cleaning up...')
-
-    // 中断fetch请求
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
-      console.log('[Workshop] Aborted fetch request')
-    }
-
-    // 关闭EventSource连接
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-      eventSourceRef.current = null
-      console.log('[Workshop] Closed EventSource connection')
-    }
-
-    // 清理状态
-    setIsStreaming(false)
-    setStreamingMessages(new Map())
-    console.log('[Workshop] Cleanup complete')
-  }, [])
 
   // ✅ 清理effect - 当组件卸载或notebook切换时自动清理
   useEffect(() => {
