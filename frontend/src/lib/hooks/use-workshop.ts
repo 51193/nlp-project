@@ -28,6 +28,7 @@ interface StreamingMessage {
   round_number: number
   timestamp: string
   isComplete: boolean
+  tool_calls?: Array<Record<string, any>>  // ✅ 新增: 工具调用记录
 }
 
 export function useWorkshop({ notebookId, autoStart = true, useStreaming = true }: UseWorkshopOptions) {
@@ -156,13 +157,9 @@ export function useWorkshop({ notebookId, autoStart = true, useStreaming = true 
   // -------------------- SSE流式方法 --------------------
   const createSessionWithStreaming = useCallback(
     async (mode: string, topic: string, context?: Record<string, unknown>) => {
-      // 清理之前的连接
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-      }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
+      // ✅ 先停止之前的streaming（如果有）
+      console.log('[Workshop] Creating new session, cleaning up previous connections first...')
+      stopStreaming()
 
       setIsStreaming(true)
       setStreamingMessages(new Map())
@@ -287,6 +284,42 @@ export function useWorkshop({ notebookId, autoStart = true, useStreaming = true 
                   })
                 }
 
+                // ✅ 新增: 处理agent_complete事件（包含完整消息和tool_calls）
+                else if (currentEventType === 'agent_complete' && data.agent_id && data.round) {
+                  const key = `${data.agent_id}-${data.round}`
+                  console.log('[SSE Frontend] Agent complete:', key, 'tool_calls:', data.tool_calls?.length || 0)
+
+                  // 更新消息，添加tool_calls和完整内容
+                  setStreamingMessages(prev => {
+                    const newMap = new Map(prev)
+                    const existing = newMap.get(key)
+
+                    if (existing) {
+                      // 更新现有消息，添加tool_calls
+                      newMap.set(key, {
+                        ...existing,
+                        content: data.content || existing.content,  // 使用完整内容
+                        tool_calls: data.tool_calls || [],
+                        timestamp: data.timestamp || existing.timestamp,
+                        isComplete: true
+                      })
+                    } else {
+                      // 如果之前没有收到chunk，创建完整消息
+                      newMap.set(key, {
+                        agent_id: data.agent_id,
+                        agent_name: data.agent_id,
+                        content: data.content || '',
+                        round_number: data.round,
+                        timestamp: data.timestamp || new Date().toISOString(),
+                        tool_calls: data.tool_calls || [],
+                        isComplete: true
+                      })
+                    }
+
+                    return newMap
+                  })
+                }
+
                 else if (currentEventType === 'session_complete' && data.session_id) {
                   console.log('[SSE Frontend] Session completed:', data.session_id)
                   toast.success('Discussion completed!')
@@ -340,26 +373,49 @@ export function useWorkshop({ notebookId, autoStart = true, useStreaming = true 
         abortControllerRef.current = null
       }
     },
-    [notebookId, queryClient, refetchSessions, startPolling, currentSessionId]
+    [notebookId, queryClient, refetchSessions, startPolling, currentSessionId, stopStreaming]
   )
 
   const stopStreaming = useCallback(() => {
+    console.log('[Workshop] Stopping streaming and cleaning up...')
+
+    // 中断fetch请求
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
+      abortControllerRef.current = null
+      console.log('[Workshop] Aborted fetch request')
     }
+
+    // 关闭EventSource连接
     if (eventSourceRef.current) {
       eventSourceRef.current.close()
       eventSourceRef.current = null
+      console.log('[Workshop] Closed EventSource connection')
     }
+
+    // 清理状态
     setIsStreaming(false)
+    setStreamingMessages(new Map())
+    console.log('[Workshop] Cleanup complete')
   }, [])
 
-  // 清理effect
+  // ✅ 清理effect - 当组件卸载或notebook切换时自动清理
   useEffect(() => {
     return () => {
+      console.log('[Workshop] Component unmounting, cleaning up streaming...')
       stopStreaming()
     }
   }, [stopStreaming])
+
+  // ✅ 监听notebookId变化，切换notebook时也清理
+  useEffect(() => {
+    return () => {
+      if (isStreaming) {
+        console.log('[Workshop] Notebook changed, cleaning up streaming...')
+        stopStreaming()
+      }
+    }
+  }, [notebookId, isStreaming, stopStreaming])
 
   // -------------------- 公共方法 --------------------
   const createNewSession = useCallback(

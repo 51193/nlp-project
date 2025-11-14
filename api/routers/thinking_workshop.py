@@ -401,13 +401,26 @@ async def create_and_stream_session(request: CreateSessionRequest):
                     except asyncio.QueueFull:
                         logger.warning("Event queue full, dropping chunk event")
 
+                # ✅ 新增: Agent完成回调 - 包含完整消息和tool_calls
+                def agent_complete_callback(message: dict):
+                    """Called when an agent completes, includes full message with tool_calls"""
+                    try:
+                        event_queue.put_nowait({
+                            'type': 'agent_complete',
+                            'message': message  # 包含 agent_id, content, tool_calls, round, timestamp
+                        })
+                        logger.info(f"[SSE] Queued agent_complete event for {message.get('agent_id')} round {message.get('round')}")
+                    except asyncio.QueueFull:
+                        logger.warning("Event queue full, dropping agent_complete event")
+
                 # Run the session with streaming in a background task
                 async def run_workflow():
                     try:
                         logger.info(f"[SSE] Starting workflow execution for session {session.id}")
                         result = await service.run_session_streaming(
                             session_id=session.id,
-                            stream_callback=stream_callback
+                            stream_callback=stream_callback,
+                            agent_complete_callback=agent_complete_callback  # ✅ 新增：传递agent完成回调
                         )
                         logger.info(f"[SSE] Workflow execution completed for session {session.id}")
                         await event_queue.put({'type': 'session_complete', 'session_id': session.id})
@@ -453,6 +466,12 @@ async def create_and_stream_session(request: CreateSessionRequest):
                         yield f"event: agent_chunk\ndata: {data}\n\n"
                         yield ": flush\n\n"  # Force flush immediately after
                         logger.debug(f"[SSE] 发送 agent_chunk 事件")
+                    elif event['type'] == 'agent_complete':
+                        # ✅ 新增: 处理agent_complete事件（包含完整消息和tool_calls）
+                        data = json.dumps(event['message'])
+                        yield f"event: agent_complete\ndata: {data}\n\n"
+                        yield ": flush\n\n"  # Force flush immediately after
+                        logger.info(f"[SSE] 发送 agent_complete 事件 (agent: {event['message'].get('agent_id')}, tool_calls: {len(event['message'].get('tool_calls', []))})")
                     elif event['type'] == 'session_complete':
                         data = json.dumps({'session_id': event['session_id']})
                         yield f"event: session_complete\ndata: {data}\n\n"

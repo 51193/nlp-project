@@ -86,7 +86,8 @@ class ThinkingWorkshopService:
     async def run_session_streaming(
         self,
         session_id: str,
-        stream_callback: Optional[callable] = None
+        stream_callback: Optional[callable] = None,
+        agent_complete_callback: Optional[callable] = None  # ✅ 新增：agent完成回调
     ) -> WorkshopSession:
         """
         Run workshop session with streaming support
@@ -94,6 +95,7 @@ class ThinkingWorkshopService:
         Args:
             session_id: Session ID
             stream_callback: Callback function(agent_id, round, chunk) for streaming
+            agent_complete_callback: Callback function(message) for agent completion with tool_calls
 
         Returns:
             Completed WorkshopSession
@@ -140,7 +142,8 @@ class ThinkingWorkshopService:
                     topic=session.topic,
                     context=session.context,
                     streaming=True,
-                    stream_callback=stream_callback
+                    stream_callback=stream_callback,
+                    agent_complete_callback=agent_complete_callback  # ✅ 新增：传递agent完成回调
                 )
                 logger.info(f"[Workshop] Workflow execution completed")
             except Exception as e:

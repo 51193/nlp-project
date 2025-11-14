@@ -21,6 +21,7 @@ interface StreamingMessage {
   round_number: number
   timestamp: string
   isComplete: boolean
+  tool_calls?: Array<{ tool: string; input: unknown; output: string }>  // ✅ 新增: 工具调用记录
 }
 
 interface WorkshopMessagesProps {
@@ -288,6 +289,156 @@ function ToolCallDisplay({ toolCall }: { toolCall: { tool: string; input: unknow
 }
 
 /**
+ * Integrator JSON美化展示组件
+ * 用于头脑风暴模式的integrator agent输出
+ */
+function IntegratorJsonView({ jsonContent }: { jsonContent: string }) {
+  try {
+    // 提取JSON代码块 (支持```json```格式或纯JSON)
+    let jsonMatch = jsonContent.match(/```json\s*(\{[\s\S]*?\})\s*```/) ||
+                    jsonContent.match(/(\{[\s\S]*"top_ideas"[\s\S]*\})/)
+
+    if (jsonMatch) {
+      // 清理JSON字符串（移除可能的trailing commas等）
+      let jsonStr = jsonMatch[1]
+        .replace(/,\s*}/g, '}')  // 移除对象中的trailing comma
+        .replace(/,\s*]/g, ']')  // 移除数组中的trailing comma
+        .trim()
+
+      const parsed = JSON.parse(jsonStr)
+      const topIdeas = parsed.top_ideas || []
+
+      // 边框颜色映射
+      const getBorderColor = (rank: number) => {
+        if (rank === 1) return '#22c55e' // 绿色
+        if (rank === 2) return '#3b82f6' // 蓝色
+        return '#f59e0b' // 橙色
+      }
+
+      // 风险等级徽章variant
+      const getRiskVariant = (level: string): "destructive" | "secondary" | "outline" => {
+        if (level === 'High') return 'destructive'
+        if (level === 'Medium') return 'secondary'
+        return 'outline'
+      }
+
+      return (
+        <div className="space-y-4">
+          <div className="font-semibold text-base mb-3">🎯 Top 3 Integrated Ideas</div>
+
+          {topIdeas.map((idea: any, idx: number) => (
+            <Card
+              key={idx}
+              className="border-l-4"
+              style={{ borderLeftColor: getBorderColor(idea.rank) }}
+            >
+              <CardContent className="pt-4 space-y-3">
+                {/* 排名和标题 */}
+                <div className="flex items-start gap-3">
+                  <Badge variant="default" className="flex-shrink-0">#{idea.rank}</Badge>
+                  <h3 className="font-semibold text-base flex-1">{idea.title}</h3>
+                </div>
+
+                {/* 描述 */}
+                <p className="text-sm text-muted-foreground">{idea.description}</p>
+
+                {/* 评分指标 */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center p-2 bg-muted/50 rounded">
+                    <div className="text-xs text-muted-foreground">Innovation</div>
+                    <div className="text-lg font-bold">{idea.innovation_score}/10</div>
+                  </div>
+                  <div className="text-center p-2 bg-muted/50 rounded">
+                    <div className="text-xs text-muted-foreground">Feasibility</div>
+                    <div className="text-lg font-bold">{idea.feasibility_score}/10</div>
+                  </div>
+                  <div className="text-center p-2 bg-muted/50 rounded">
+                    <div className="text-xs text-muted-foreground">Impact</div>
+                    <div className="text-lg font-bold">{idea.impact_score}/10</div>
+                  </div>
+                </div>
+
+                {/* 风险等级 */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Risk Level:</span>
+                  <Badge variant={getRiskVariant(idea.risk_level)}>
+                    {idea.risk_level}
+                  </Badge>
+                </div>
+
+                {/* 来源 */}
+                {idea.sources && idea.sources.length > 0 && (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Sources: </span>
+                    <span>{idea.sources.join(', ')}</span>
+                  </div>
+                )}
+
+                {/* 证据 */}
+                {idea.evidence && (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground font-medium">Evidence: </span>
+                    <span className="text-muted-foreground">{idea.evidence}</span>
+                  </div>
+                )}
+
+                {/* 实施步骤 (可折叠) */}
+                {idea.implementation_steps && idea.implementation_steps.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+                      ▸ Implementation Steps ({idea.implementation_steps.length})
+                    </summary>
+                    <ol className="list-decimal list-inside mt-2 space-y-1 text-muted-foreground pl-2">
+                      {idea.implementation_steps.map((step: string, i: number) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ol>
+                  </details>
+                )}
+
+                {/* 风险和缓解措施 (可折叠) */}
+                {idea.risks_and_mitigation && idea.risks_and_mitigation.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+                      ▸ Risks & Mitigation ({idea.risks_and_mitigation.length})
+                    </summary>
+                    <ul className="list-disc list-inside mt-2 space-y-1 text-muted-foreground pl-2">
+                      {idea.risks_and_mitigation.map((item: string, i: number) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+
+          {/* 优先级推荐 */}
+          {parsed.recommended_priority && parsed.recommended_priority.length > 0 && (
+            <div className="mt-4 p-4 bg-muted/30 rounded-lg">
+              <div className="font-medium text-sm mb-2">📋 Recommended Priority</div>
+              <div className="text-sm text-muted-foreground">
+                {parsed.recommended_priority.join(' → ')}
+              </div>
+              {parsed.priority_reasoning && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {parsed.priority_reasoning}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )
+    }
+  } catch (e) {
+    // JSON解析失败，返回null使用默认渲染
+    console.error('Failed to parse integrator JSON:', e)
+  }
+
+  return null
+}
+
+/**
  * 单个Agent消息组件 - 支持打字机效果
  */
 function AgentMessageCard({
@@ -304,6 +455,12 @@ function AgentMessageCard({
     speed: 20,  // 20ms per character
     enabled: enableTypewriter
   })
+
+  // ✅ 检测是否是Integrator的JSON输出
+  const isIntegratorJson = agent.id === 'integrator' && (
+    message.content.includes('```json') ||
+    (message.content.includes('"top_ideas"') && message.content.includes('"rank"'))
+  )
 
   return (
     <Card className="overflow-hidden w-full max-w-full">
@@ -329,39 +486,67 @@ function AgentMessageCard({
 
       {/* 消息内容 */}
       <CardContent className="pt-4 overflow-hidden">
-        <div className="prose prose-sm max-w-full dark:prose-invert">
-          <ReactMarkdown
-            components={{
-              // Ensure proper text wrapping for all elements
-              p: ({ children }) => <p className="break-words whitespace-pre-wrap mb-2">{children}</p>,
-              code: ({ className, children }) => {
-                // Inline code
-                if (!className) {
-                  return <code className="break-all bg-muted px-1 py-0.5 rounded text-xs">{children}</code>
-                }
-                // Code block
-                return <code className="break-all">{children}</code>
-              },
-              pre: ({ children }) => (
-                <pre className="overflow-x-auto bg-muted p-2 rounded text-xs my-2 max-w-full">
-                  {children}
-                </pre>
-              ),
-              a: ({ href, children }) => (
-                <a
-                  href={href}
-                  className="text-primary underline break-all"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {children}
-                </a>
-              ),
-            }}
-          >
-            {displayedText}
-          </ReactMarkdown>
-        </div>
+        {isIntegratorJson ? (
+          // ✅ Integrator使用特殊JSON渲染
+          <IntegratorJsonView jsonContent={displayedText} /> || (
+            // 如果JSON解析失败，降级到Markdown渲染
+            <div className="prose prose-sm max-w-full dark:prose-invert">
+              <ReactMarkdown
+                components={{
+                  p: ({ children }) => <p className="break-words whitespace-pre-wrap mb-2">{children}</p>,
+                  code: ({ className, children }) => {
+                    if (!className) {
+                      return <code className="break-all bg-muted px-1 py-0.5 rounded text-xs">{children}</code>
+                    }
+                    return <code className="break-all">{children}</code>
+                  },
+                  pre: ({ children }) => (
+                    <pre className="overflow-x-auto bg-muted p-2 rounded text-xs my-2 max-w-full">
+                      {children}
+                    </pre>
+                  ),
+                }}
+              >
+                {displayedText}
+              </ReactMarkdown>
+            </div>
+          )
+        ) : (
+          // 其他Agent使用标准Markdown渲染
+          <div className="prose prose-sm max-w-full dark:prose-invert">
+            <ReactMarkdown
+              components={{
+                // Ensure proper text wrapping for all elements
+                p: ({ children }) => <p className="break-words whitespace-pre-wrap mb-2">{children}</p>,
+                code: ({ className, children }) => {
+                  // Inline code
+                  if (!className) {
+                    return <code className="break-all bg-muted px-1 py-0.5 rounded text-xs">{children}</code>
+                  }
+                  // Code block
+                  return <code className="break-all">{children}</code>
+                },
+                pre: ({ children }) => (
+                  <pre className="overflow-x-auto bg-muted p-2 rounded text-xs my-2 max-w-full">
+                    {children}
+                  </pre>
+                ),
+                a: ({ href, children }) => (
+                  <a
+                    href={href}
+                    className="text-primary underline break-all"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {displayedText}
+            </ReactMarkdown>
+          </div>
+        )}
 
         {/* 工具调用记录 */}
         {message.tool_calls && message.tool_calls.length > 0 && (
@@ -497,7 +682,7 @@ export function WorkshopMessages({
                   content: streamMsg.content,
                   round_number: streamMsg.round_number,
                   timestamp: streamMsg.timestamp,
-                  tool_calls: [],
+                  tool_calls: streamMsg.tool_calls || [],  // ✅ 使用流式消息中的tool_calls
                   error: false,
                   message_type: 'statement',
                   references: []
@@ -522,29 +707,6 @@ export function WorkshopMessages({
               <Loader2 className="h-4 w-4 animate-spin" />
               <span className="text-sm">Discussion in progress, please wait...</span>
             </div>
-          )}
-
-          {/* 最终报告 */}
-          {session.status === 'completed' && session.final_report && (
-            <Card className="bg-primary/5 border-primary/20 w-full">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <FileText className="h-4 w-4" />
-                  <h4 className="text-sm font-semibold">Final Report</h4>
-                </div>
-                <div className="prose prose-sm max-w-none dark:prose-invert break-words">
-                  <ReactMarkdown
-                    components={{
-                      p: ({ children }) => <p className="break-words whitespace-pre-wrap">{children}</p>,
-                      code: ({ children }) => <code className="break-all">{children}</code>,
-                      pre: ({ children }) => <pre className="overflow-x-auto">{children}</pre>,
-                    }}
-                  >
-                    {session.final_report}
-                  </ReactMarkdown>
-                </div>
-              </CardContent>
-            </Card>
           )}
 
           {/* 失败提示 */}

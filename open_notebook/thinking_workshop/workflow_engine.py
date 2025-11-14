@@ -69,6 +69,7 @@ class WorkflowEngine:
         self.mode_config = self.agent_manager.get_mode(mode_id)
         self.notebook_id = notebook_id
         self.notebook_content = None  # ✅ 新增：缓存notebook内容
+        self.notebook_metadata = None  # ✅ 新增：缓存notebook元数据（用于虚拟工具调用显示）
 
         # Create Agent executors (with tools)
         self.executors = {}
@@ -336,16 +337,17 @@ class WorkflowEngine:
             logger.info(f"[_execute_agent] executor.execute() 完成")
 
             # 创建新消息（包含工具调用记录）
+            tool_calls = result.get("tool_calls", [])
             message = {
                 "agent_id": agent_id,
                 "content": result["content"],
-                "tool_calls": result.get("tool_calls", []),  # 新增：工具调用记录
+                "tool_calls": tool_calls,  # 使用真实的工具调用记录
                 "round": state["current_round"],
                 "timestamp": datetime.now().isoformat()
             }
 
             logger.info(f"Agent {agent_id} 完成，响应长度: {len(result['content'])}, "
-                       f"工具调用: {len(result.get('tool_calls', []))}次")
+                       f"工具调用: {len(tool_calls)}次")
 
             # 如果有流式回调，发送完整消息（批量模式）
             if hasattr(self, 'streaming') and self.streaming and hasattr(self, 'stream_callback') and self.stream_callback:
@@ -353,6 +355,11 @@ class WorkflowEngine:
                 # 发送完整内容作为一个大块
                 if result["content"]:
                     self.stream_callback(agent_id, state['current_round'], result["content"])
+
+            # ✅ 新增: 如果有agent完成回调，发送完整消息（包含tool_calls）
+            if hasattr(self, 'streaming') and self.streaming and hasattr(self, 'agent_complete_callback') and self.agent_complete_callback:
+                logger.info(f"[_execute_agent] 发送agent_complete回调，包含 {len(result.get('tool_calls', []))} 个工具调用")
+                self.agent_complete_callback(message)
 
             # 只返回新增的部分，而不是整个state
             # Annotated reducer会自动合并
@@ -467,7 +474,8 @@ class WorkflowEngine:
         topic: str,
         context: Dict[str, Any],
         streaming: bool = True,  # 默认启用流式输出
-        stream_callback: Optional[callable] = None
+        stream_callback: Optional[callable] = None,
+        agent_complete_callback: Optional[callable] = None  # ✅ 新增：agent完成回调
     ) -> Dict[str, Any]:
         """
         运行工作流
@@ -477,6 +485,7 @@ class WorkflowEngine:
             context: 上下文(title, abstract等)
             streaming: 是否启用流式输出（默认True）
             stream_callback: 流式输出回调函数
+            agent_complete_callback: Agent完成回调函数（包含完整message）
 
         Returns:
             包含所有消息和最终报告的字典
@@ -486,6 +495,7 @@ class WorkflowEngine:
         # 保存流式配置到实例变量
         self.streaming = streaming
         self.stream_callback = stream_callback
+        self.agent_complete_callback = agent_complete_callback  # ✅ 新增：保存agent完成回调
         logger.info(f"[WorkflowEngine.run] 流式配置已保存")
 
         # ✅ 优化：预读取notebook内容（一次性读取，避免重复查询）
@@ -494,45 +504,19 @@ class WorkflowEngine:
             logger.info(f"[WorkflowEngine.run] Pre-loading notebook content from database")
             self.notebook_content, notebook_metadata = await self._load_notebook_content()
             logger.info(f"[WorkflowEngine.run] Notebook content loaded: {len(self.notebook_content)} characters")
+            # ✅ 保存metadata到实例变量，供_execute_agent使用
+            self.notebook_metadata = notebook_metadata
+            logger.info(f"[WorkflowEngine.run] Notebook metadata saved: source_count={self.notebook_metadata.get('source_count', 0) if self.notebook_metadata else 0}")
+        elif self.notebook_id and self.notebook_metadata:
+            # 如果内容已加载但需要局部变量，使用已保存的metadata
+            notebook_metadata = self.notebook_metadata
+            logger.info(f"[WorkflowEngine.run] Using existing notebook metadata")
 
-        # ✅ 将notebook内容注入到context中
+        # ✅ 将notebook内容注入到context中（作为fallback，如果工具调用失败）
         enhanced_context = context.copy()
         if self.notebook_content:
             enhanced_context["notebook_content"] = self.notebook_content
-            logger.info(f"[WorkflowEngine.run] Notebook content injected into context")
-
-        # ✅ 创建初始消息列表（如果有notebook，添加一条显示预加载的消息）
-        initial_messages = []
-        if notebook_metadata and notebook_metadata.get("source_count", 0) > 0:
-            # 构建工具调用摘要（和之前格式一致）
-            source_count = notebook_metadata.get("source_count", 0)
-            note_count = notebook_metadata.get("note_count", 0)
-            source_titles = notebook_metadata.get("source_titles", [])
-
-            # 构建摘要文本
-            summary = f"Read {source_count} source(s) and {note_count} note(s)"
-            if source_titles:
-                summary += f" ({', '.join(source_titles[:3])}"
-                if len(source_titles) > 3:
-                    summary += f" and {len(source_titles) - 3} more"
-                summary += ")"
-
-            # 创建虚拟工具调用记录
-            notebook_tool_call = {
-                "tool": "notebook_reader",
-                "input": f"notebook_id: {self.notebook_id}",
-                "output": f"Loaded {notebook_metadata.get('total_chars', 0)} characters from notebook"
-            }
-
-            # 添加系统消息显示notebook已预加载
-            initial_messages.append({
-                "agent_id": "system",
-                "content": f"📚 Notebook content pre-loaded: {notebook_metadata.get('notebook_title', 'Untitled')}",
-                "tool_calls": [notebook_tool_call],
-                "round": 0,  # Round 0 表示初始化阶段
-                "timestamp": datetime.now().isoformat()
-            })
-            logger.info(f"[WorkflowEngine.run] Added initial message showing notebook pre-load")
+            logger.info(f"[WorkflowEngine.run] Notebook content injected into context as fallback")
 
         # 初始化状态
         initial_state: WorkshopState = {
@@ -541,7 +525,7 @@ class WorkflowEngine:
             "context": enhanced_context,  # ✅ 使用增强的context
             "current_round": 1,
             "max_rounds": self.mode_config.workflow_rounds,
-            "messages": initial_messages,  # ✅ 包含预加载消息
+            "messages": [],  # ✅ 空消息列表，agents会通过工具调用获取notebook内容
             "available_messages": {},
             "final_report": None
         }
