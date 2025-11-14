@@ -66,6 +66,18 @@ class DefaultModels(RecordModel):
 
 
 class ModelManager:
+    DEFAULT_MODELS = {
+        "deepseek-reasoner": {
+            "name": "deepseek-reasoner",
+            "provider": "deepseek", 
+            "type": "language"
+        },
+        "gpt-4": {
+            "name": "gpt-4",
+            "provider": "openai",
+            "type": "language"
+        },
+    }
     def __init__(self):
         pass  # No caching needed
 
@@ -77,7 +89,19 @@ class ModelManager:
         try:
             model: Model = await Model.get(model_id)
         except Exception:
-            raise ValueError(f"Model with ID {model_id} not found")
+            if model_id in self.DEFAULT_MODELS:
+                model_data = self.DEFAULT_MODELS[model_id]
+                model = Model(
+                    id=model_id,
+                    name=model_data["name"],
+                    provider=model_data["provider"],
+                    type=model_data["type"]
+                )
+                logger.info(f"Using default model configuration for {model_id}")
+            else:
+                raise ValueError(f"Model with ID {model_id} not found")
+
+            # raise ValueError(f"Model with ID {model_id} not found")
 
         if not model.type or model.type not in [
             "language",

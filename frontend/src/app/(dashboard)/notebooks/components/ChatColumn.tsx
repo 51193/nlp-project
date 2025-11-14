@@ -110,7 +110,6 @@ export function ChatColumn({ notebookId, contextSelections }: ChatColumnProps) {
       loadingSessions={chat.loadingSessions}
       notebookContextStats={contextStats}
       notebookId={notebookId}
-      enableWorkshop={true} 
     />
   )
 }

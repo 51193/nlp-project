@@ -39,6 +39,7 @@ import {
   FileText,
   Plus,
   Wrench,
+  ClipboardList,
 } from 'lucide-react'
 
 const navigation = [
@@ -59,6 +60,7 @@ const navigation = [
     title: 'Create',
     items: [
       { name: 'Podcasts', href: '/podcasts', icon: Mic },
+      { name: "Quizzes", href: "/quiz", icon: ClipboardList}
     ],
   },
   {

@@ -407,10 +407,6 @@ class CreateSourceInsightRequest(BaseModel):
         None, description="Model ID (uses default if not provided)"
     )
 
-    response_language: Optional[str] = Field(
-        None, description="Response language to use"
-    )
-
 
 # Source status response
 class SourceStatusResponse(BaseModel):

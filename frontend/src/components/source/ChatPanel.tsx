@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Bot, User, Send, Loader2, FileText, Lightbulb, StickyNote, Clock, MessageCircle, Brain } from 'lucide-react'
+import { Bot, User, Send, Loader2, FileText, Lightbulb, StickyNote, Clock } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import {
   SourceChatMessage,
@@ -21,9 +21,6 @@ import { MessageActions } from '@/components/source/MessageActions'
 import { convertReferencesToCompactMarkdown, createCompactReferenceLinkComponent } from '@/lib/utils/source-references'
 import { useModalManager } from '@/lib/hooks/use-modal-manager'
 import { toast } from 'sonner'
-import { useWorkshop } from '@/lib/hooks/use-workshop'
-import { WorkshopModeSelector, WorkshopMessages } from '@/components/workshop'
-import { WorkshopMode } from '@/lib/types/workshop'
 
 interface NotebookContextStats {
   sourcesInsights: number
@@ -55,8 +52,6 @@ interface ChatPanelProps {
   notebookContextStats?: NotebookContextStats
   // Notebook ID for saving notes
   notebookId?: string
-  // Workshop props (optional)
-  enableWorkshop?: boolean
 }
 
 export function ChatPanel({
@@ -76,22 +71,13 @@ export function ChatPanel({
   title = 'Chat with Source',
   contextType = 'source',
   notebookContextStats,
-  notebookId,
-  enableWorkshop = false
+  notebookId
 }: ChatPanelProps) {
   const [input, setInput] = useState('')
-  const [workshopTopic, setWorkshopTopic] = useState('')
-  const [chatMode, setChatMode] = useState<WorkshopMode>('chat')
   const [sessionManagerOpen, setSessionManagerOpen] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { openModal } = useModalManager()
-
-  // Initialize workshop hook (only if enabled)
-  const workshop = useWorkshop({
-    notebookId: notebookId || '',
-    autoStart: true
-  })
 
   const handleReferenceClick = (type: string, id: string) => {
     const modalType = type === 'source_insight' ? 'insight' : type as 'source' | 'note' | 'insight'
@@ -173,116 +159,20 @@ export function ChatPanel({
             </Dialog>
           )}
         </div>
-
-        {/* Mode switcher (only for notebook with workshop enabled) */}
-        {enableWorkshop && (
-          <div className="flex gap-2 mt-3">
-            <Button
-              variant={chatMode === 'chat' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setChatMode('chat')}
-              className="flex-1"
-            >
-              <MessageCircle className="h-4 w-4 mr-2" />
-              Normal Chat
-            </Button>
-            <Button
-              variant={chatMode === 'workshop' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setChatMode('workshop')}
-              className="flex-1"
-            >
-              <Brain className="h-4 w-4 mr-2" />
-              Thinking Workshop
-            </Button>
-          </div>
-        )}
       </CardHeader>
       <CardContent className="flex-1 flex flex-col min-h-0 p-0">
-        {/* Workshop Mode */}
-        {chatMode === 'workshop' && enableWorkshop ? (
-          <>
-            {!workshop.currentSession ? (
-              /* Show mode selector and input */
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <ScrollArea className="flex-1 px-4 py-4">
-                  <WorkshopModeSelector
-                    templates={workshop.templates}
-                    selectedTemplate={workshop.selectedTemplate}
-                    onSelect={workshop.setSelectedTemplate}
-                    isLoading={workshop.isLoading}
-                  />
-                </ScrollArea>
-
-                {/* Input area for topic */}
-                {workshop.selectedTemplate && (
-                  <div className="flex-shrink-0 p-4 border-t space-y-3">
-                    <Textarea
-                      value={workshopTopic}
-                      onChange={(e) => setWorkshopTopic(e.target.value)}
-                      placeholder="Enter discussion topic (e.g., Evaluate Transformer architecture)..."
-                      disabled={workshop.isCreatingSession}
-                      className="flex-1 min-h-[60px] max-h-[120px] resize-none"
-                      rows={2}
-                    />
-                    <Button
-                      className="w-full"
-                      onClick={() => {
-                        if (workshopTopic.trim() && workshop.selectedTemplate) {
-                          // Provide context with title and abstract to avoid template variable errors
-                          const context = {
-                            title: workshopTopic.trim(),
-                            abstract: `A discussion about: ${workshopTopic.trim()}`,
-                            context: workshopTopic.trim()
-                          }
-                          workshop.createNewSession(
-                            workshop.selectedTemplate.mode_id,
-                            workshopTopic.trim(),
-                            context
-                          )
-                          setWorkshopTopic('')
-                        }
-                      }}
-                      disabled={!workshopTopic.trim() || workshop.isCreatingSession}
-                    >
-                      {workshop.isCreatingSession ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Creating...
-                        </>
-                      ) : (
-                        <>Start Discussion</>
-                      )}
-                    </Button>
-                  </div>
-                )}
+        <ScrollArea className="flex-1 min-h-0 px-4" ref={scrollAreaRef}>
+          <div className="space-y-4 py-4">
+            {messages.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">
+                <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-sm">
+                  Start a conversation about this {contextType}
+                </p>
+                <p className="text-xs mt-2">Ask questions to understand the content better</p>
               </div>
             ) : (
-              /* Show workshop messages */
-              <WorkshopMessages
-                session={workshop.currentSession}
-                agentsInfo={workshop.selectedTemplate?.agents || []}
-                isPolling={workshop.isPolling}
-                isStreaming={workshop.isStreaming}
-                streamingMessages={workshop.streamingMessages}
-              />
-            )}
-          </>
-        ) : (
-          /* Normal Chat Mode */
-          <>
-            <ScrollArea className="flex-1 min-h-0 px-4" ref={scrollAreaRef}>
-              <div className="space-y-4 py-4">
-                {messages.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">
-                    <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-sm">
-                      Start a conversation about this {contextType}
-                    </p>
-                    <p className="text-xs mt-2">Ask questions to understand the content better</p>
-                  </div>
-                ) : (
-                  messages.map((message) => (
+              messages.map((message) => (
                 <div
                   key={message.id}
                   className={`flex gap-3 ${
@@ -421,8 +311,6 @@ export function ChatPanel({
             </Button>
           </div>
         </div>
-          </>
-        )}
       </CardContent>
     </Card>
 

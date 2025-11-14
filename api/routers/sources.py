@@ -1015,9 +1015,7 @@ async def create_source_insight(source_id: str, request: CreateSourceInsightRequ
         from open_notebook.graphs.transformation import graph as transform_graph
 
         await transform_graph.ainvoke(
-            input=dict(source=source,
-                       transformation=transformation,
-                       response_language=request.response_language)  # type: ignore[arg-type]
+            input=dict(source=source, transformation=transformation)  # type: ignore[arg-type]
         )
 
         # Get the newly created insight (last one)

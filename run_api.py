@@ -15,9 +15,17 @@ sys.path.insert(0, str(current_dir))
 
 if __name__ == "__main__":
     # Default configuration
+    # host = os.getenv("API_HOST", "0.0.0.0")
     host = os.getenv("API_HOST", "127.0.0.1")
     port = int(os.getenv("API_PORT", "5055"))
     reload = os.getenv("API_RELOAD", "true").lower() == "true"
+
+    # reload = False
+
+    # reload = os.getenv("API_RELOAD", "false").lower() == "true"
+
+    # if os.getenv("BACKGROUND_MODE") or not sys.stdout.isatty():
+    #     reload = False
 
     print(f"Starting Open Notebook API server on {host}:{port}")
     print(f"Reload mode: {reload}")

@@ -1,18 +1,20 @@
 services:
   surrealdb:
     image: surrealdb/surrealdb:v2
+    ports:
+      - "8000:8000"
     volumes:
       - ./surreal_data:/mydata
     environment:
       - SURREAL_EXPERIMENTAL_GRAPHQL=true
-    ports:
-      - "8000:8000"
     command: start --log info --user root --pass root rocksdb:/mydata/mydatabase.db
     pull_policy: always
     user: root
     restart: always
   open_notebook:
-    image: lfnovo/open_notebook:v1-latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8502:8502"
       - "5055:5055"
@@ -23,3 +25,32 @@ services:
     volumes:
       - ./notebook_data:/app/data
     restart: always
+
+
+# services:
+#   open_notebook: 
+#     image: lfnovo/open_notebook:v1-latest-single
+#     ports:
+#       - "8502:8502"  # Frontend
+#       - "5055:5055"  # API
+#     environment:
+#       - DEEPSEEK_API_KEY=""
+#     volumes:
+#       - ./notebook_data:/app/data
+#       - ./surreal_data:/mydata
+#     restart: always
+    
+
+# services:
+#   open_notebook:
+#     image: lfnovo/open_notebook:v1-latest-single
+#     ports:
+#       - "8502:8502"  # Web UI
+#       - "5055:5055"  # API (required!)
+#     env_file:
+#       - ./docker.env
+#     pull_policy: always
+#     volumes:
+#       - ./notebook_data:/app/data
+#       - ./surreal_single_data:/mydata
+#     restart: always

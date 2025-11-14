@@ -414,16 +414,12 @@ class APIClient:
         )
 
     def create_source_insight(
-        self, source_id: str, transformation_id: str, response_language: str, model_id: Optional[str] = None
+        self, source_id: str, transformation_id: str, model_id: Optional[str] = None
     ) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
         """Create a new insight for a source by running a transformation."""
         data = {"transformation_id": transformation_id}
         if model_id:
             data["model_id"] = model_id
-        if response_language:
-            data["response_language"] = response_language
-        else:
-            data["response_language"] = "English"
         return self._make_request(
             "POST", f"/api/sources/{source_id}/insights", json=data
         )
@@ -471,6 +467,92 @@ class APIClient:
     def delete_episode_profile(self, profile_id: str) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
         """Delete an episode profile."""
         return self._make_request("DELETE", f"/api/episode-profiles/{profile_id}")
+    
+
+    # Quiz API methods
+    def get_quizzes(self, notebook_id: Optional[str] = None) -> List[Dict[Any, Any]]:
+        """Get all quizzes with optional notebook filtering."""
+        params = {}
+        if notebook_id:
+            params["notebook_id"] = notebook_id
+        result = self._make_request("GET", "/api/quizzes", params=params)
+        return result if isinstance(result, list) else [result]
+
+    def get_quiz(self, quiz_id: str) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
+        """Get a specific quiz."""
+        return self._make_request("GET", f"/api/quizzes/{quiz_id}")
+
+    def generate_quiz(
+        self,
+        quiz_profile: str,
+        quiz_title: str,
+        content: str,
+        quiz_template: Optional[str] = None,
+        notebook_id: Optional[str] = None,
+        source_ids: Optional[List[str]] = None,
+        note_ids: Optional[List[str]] = None,
+        question_count: int = 10,
+        quiz_type: str = "multiple-choice",
+        difficulty: str = "medium"
+    ) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
+        """Generate a new quiz."""
+        data = {
+            "quiz_profile": quiz_profile,
+            "quiz_title": quiz_title,
+            "content": content,
+            "question_count": question_count,
+            "quiz_type": quiz_type,
+            "difficulty": difficulty,
+        }
+        
+        if quiz_template:
+            data["quiz_template"] = quiz_template
+        if notebook_id:
+            data["notebook_id"] = notebook_id
+        if source_ids:
+            data["source_ids"] = source_ids
+        if note_ids:
+            data["note_ids"] = note_ids
+            
+        return self._make_request("POST", "/api/quizzes/generate", json=data)
+    
+    def update_quiz(self, quiz_id: str, **updates) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
+        """Update a quiz."""
+        return self._make_request("PUT", f"/api/quizzes/{quiz_id}", json=updates)
+
+    def get_quiz_analytics(self, quiz_id: str) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
+        """Get analytics for a quiz."""
+        return self._make_request("GET", f"/api/quizzes/{quiz_id}/analytics")
+
+    def submit_quiz_answers(
+        self, 
+        quiz_id: str, 
+        answers: Dict[str, Any], 
+        time_spent_seconds: Optional[int] = None
+    ) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
+        """Submit answers for a quiz."""
+        data = {"answers": answers}
+        if time_spent_seconds is not None:
+            data["time_spent_seconds"] = time_spent_seconds
+        return self._make_request("POST", f"/api/quizzes/{quiz_id}/submit", json=data)
+
+    def delete_quiz(self, quiz_id: str) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
+        """Delete a quiz."""
+        return self._make_request("DELETE", f"/api/quizzes/{quiz_id}")
+
+    def get_quiz_job_status(self, job_id: str) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
+        """Get status of a quiz generation job."""
+        return self._make_request("GET", f"/api/quizzes/jobs/{job_id}")
+
+    def get_quiz_templates(self) -> List[Dict[Any, Any]]:
+        """Get all quiz templates."""
+        result = self._make_request("GET", "/api/quizzes/templates")
+        return result if isinstance(result, list) else [result]
+
+    def get_quiz_profiles(self) -> List[Dict[Any, Any]]:
+        """Get all quiz profiles."""
+        result = self._make_request("GET", "/api/quizzes/profiles")
+        return result if isinstance(result, list) else [result]
 
 
 # Global client instance

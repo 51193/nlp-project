@@ -11,7 +11,6 @@ export interface SourceInsightResponse {
 
 export interface CreateSourceInsightRequest {
   transformation_id: string
-  response_language: string
 }
 
 export const insightsApi = {

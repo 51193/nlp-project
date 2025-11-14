@@ -106,3 +106,27 @@ export const sourcesApi = {
     })
   },
 }
+
+// // 创建一个简单的测试函数
+// const testCreateSource = async () => {
+//   try {
+//     const testData = {
+//       type: 'text' as const,
+//       content: '这是一个测试内容，用于验证 content 字段是否正常传递。',
+//       title: '测试文档',
+//       notebook_id: 'test-notebook-id',
+//       embed: true
+//     }
+    
+//     console.log('🧪 开始测试 Source 创建...')
+//     const result = await sourcesApi.create(testData)
+//     console.log('✅ 测试成功:', result)
+//     return result
+//   } catch (error) {
+//     console.error('❌ 测试失败:', error)
+//     throw error
+//   }
+// }
+
+// // 在需要的时候调用
+// testCreateSource()

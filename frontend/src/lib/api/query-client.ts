@@ -30,4 +30,8 @@ export const QUERY_KEYS = {
   podcastEpisode: (episodeId: string) => ['podcasts', 'episodes', episodeId] as const,
   episodeProfiles: ['podcasts', 'episode-profiles'] as const,
   speakerProfiles: ['podcasts', 'speaker-profiles'] as const,
+  quizzes: ['quizzes'] as const,
+  quiz: (id: string) => ['quizzes', id] as const,
+  quizTemplates: ['quiz-templates'] as const,
+  quizTemplate: (id: string) => ['quiz-templates', id] as const,
 }

@@ -70,7 +70,6 @@ export function SourceDetailContent({
   const [insights, setInsights] = useState<SourceInsightResponse[]>([])
   const [transformations, setTransformations] = useState<Transformation[]>([])
   const [selectedTransformation, setSelectedTransformation] = useState<string>('')
-  const [selectedLanguage, setSelectedLanguage] = useState<'Chinese' | 'English'>('English')
   const [loading, setLoading] = useState(true)
   const [loadingInsights, setLoadingInsights] = useState(false)
   const [creatingInsight, setCreatingInsight] = useState(false)
@@ -139,8 +138,7 @@ export function SourceDetailContent({
     try {
       setCreatingInsight(true)
       await insightsApi.create(sourceId, {
-        transformation_id: selectedTransformation,
-        response_language: selectedLanguage
+        transformation_id: selectedTransformation
       })
       toast.success('Insight created successfully')
       await fetchInsights()
@@ -518,23 +516,6 @@ export function SourceDetailContent({
                         ))}
                       </SelectContent>
                     </Select>
-                </div>
-
-                <div className="flex gap-2 items-center">
-                    <Select
-                      value={selectedLanguage}
-                      onValueChange={(value: 'Chinese' | 'English') => setSelectedLanguage(value)}
-                      disabled={creatingInsight}
-                    >
-                      <SelectTrigger className="w-32">
-                        <SelectValue placeholder="Language" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Chinese">中文</SelectItem>
-                        <SelectItem value="English">English</SelectItem>
-                      </SelectContent>
-                    </Select>
-
                     <Button
                       size="sm"
                       onClick={createInsight}
