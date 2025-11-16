@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 from ai_prompter import Prompter
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -90,6 +93,29 @@ async def run_transformation(state: dict, config: RunnableConfig) -> dict:
 
     # 格式化最终结果
     final_output_with_note = ResultFormatter.add_reliability_note(final_output, reliability_metrics)
+
+    try:
+        # 使用正确的路径
+        python_exe = r'D:\mess\NLP\tts\.venv\Scripts\python.exe'
+        script_path = r'D:\mess\NLP\tts\tts_runner.py'
+
+        # 检查文件是否存在
+        if not os.path.exists(python_exe):
+            print(f"Python解释器不存在: {python_exe}")
+        if not os.path.exists(script_path):
+            print(f"TTS脚本不存在: {script_path}")
+
+        text_to_speak = final_output_with_note.replace('"', '\\"')
+
+        # 使用subprocess运行
+        subprocess.run([
+            python_exe,
+            script_path,
+            text_to_speak
+        ])
+
+    except Exception as e:
+        print(f"TTS播放失败: {e}")
 
     # 调试信息（可选）
     if reliability_metrics.get('quality') == 'low':
