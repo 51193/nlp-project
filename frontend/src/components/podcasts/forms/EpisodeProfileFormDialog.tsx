@@ -42,7 +42,7 @@ const episodeProfileSchema = z.object({
   default_briefing: z.string().min(1, 'Default briefing is required'),
   num_segments: z.number()
     .int('Must be an integer')
-    .min(3, 'At least 3 segments')
+    .min(1, 'At least 1 segments')
     .max(20, 'Maximum 20 segments'),
 })
 
@@ -227,7 +227,7 @@ export function EpisodeProfileFormDialog({
               <Input
                 id="num_segments"
                 type="number"
-                min={3}
+                min={1}
                 max={20}
                 {...register('num_segments', { valueAsNumber: true })}
               />

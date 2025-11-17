@@ -251,6 +251,11 @@ async def get_provider_availability():
                 or _check_openai_compatible_support("STT")
                 or _check_openai_compatible_support("TTS")
             ),
+            "aliyun": os.environ.get("ALIYUN_API_KEY") is not None,
+            "moonshot": os.environ.get("MOONSHOT_API_KEY") is not None,
+            "minimax": os.environ.get("MINIMAX_API_KEY") is not None,
+            "volcengine": os.environ.get("VOLCENGINE_API_KEY") is not None,
+            "tencent": os.environ.get("TENCENT_API_KEY") is not None,
         }
         
         available_providers = [k for k, v in provider_status.items() if v]
