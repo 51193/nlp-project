@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Bot, User, Send, Loader2, FileText, Lightbulb, StickyNote, Clock, MessageCircle, Brain } from 'lucide-react'
+import { Bot, User, Send, Loader2, FileText, Lightbulb, StickyNote, Clock, MessageCircle, Brain, Mic, Square } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import {
   SourceChatMessage,
@@ -24,6 +24,8 @@ import { toast } from 'sonner'
 import { useWorkshop } from '@/lib/hooks/use-workshop'
 import { WorkshopModeSelector, WorkshopMessages } from '@/components/workshop'
 import { WorkshopMode } from '@/lib/types/workshop'
+import { transcribeAudio } from '@/lib/api/audio'
+import { useAudioRecorder } from '@/lib/hooks/useAudioRecorder'
 
 interface NotebookContextStats {
   sourcesInsights: number
@@ -83,9 +85,19 @@ export function ChatPanel({
   const [workshopTopic, setWorkshopTopic] = useState('')
   const [chatMode, setChatMode] = useState<WorkshopMode>('chat')
   const [sessionManagerOpen, setSessionManagerOpen] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { openModal } = useModalManager()
+  const {
+    isSupported: isAudioSupported,
+    isRecording,
+    audioBlob,
+    error: recorderError,
+    startRecording,
+    stopRecording,
+    reset: resetRecorder
+  } = useAudioRecorder({ maxDurationMs: 60_000 })
 
   // Initialize workshop hook (only if enabled)
   const workshop = useWorkshop({
@@ -133,6 +145,63 @@ export function ChatPanel({
   // Detect platform for placeholder text
   const isMac = typeof navigator !== 'undefined' && navigator.userAgent.toUpperCase().indexOf('MAC') >= 0
   const keyHint = isMac ? '⌘+Enter' : 'Ctrl+Enter'
+
+  useEffect(() => {
+    if (recorderError) {
+      toast.error(recorderError)
+    }
+  }, [recorderError])
+
+  useEffect(() => {
+    if (!audioBlob) {
+      return
+    }
+
+    let cancelled = false
+    const runTranscription = async () => {
+      setIsTranscribing(true)
+      try {
+        const result = await transcribeAudio(audioBlob)
+        if (!cancelled) {
+          setInput((prev) => (prev ? `${prev.trim()} ${result.text}`.trim() : result.text))
+          toast.success('语音已自动转写为文本，可编辑后发送')
+        }
+      } catch (error) {
+        console.error('Transcription failed', error)
+        if (!cancelled) {
+          toast.error('语音转写失败，请重试')
+        }
+      } finally {
+        if (!cancelled) {
+          setIsTranscribing(false)
+          resetRecorder()
+        }
+      }
+    }
+
+    runTranscription()
+
+    return () => {
+      cancelled = true
+    }
+  }, [audioBlob, resetRecorder])
+
+  const handleRecordToggle = async () => {
+    if (!isAudioSupported) {
+      toast.error('当前浏览器不支持语音输入')
+      return
+    }
+    if (isRecording) {
+      stopRecording()
+    } else {
+      await startRecording()
+      toast('正在录音', {
+        description: '再次点击即可停止并开始转写'
+      })
+    }
+  }
+
+  const isBusy = isStreaming || isTranscribing
 
   return (
     <>
@@ -403,17 +472,35 @@ export function ChatPanel({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={`Ask a question about this ${contextType}... (${keyHint} to send)`}
-              disabled={isStreaming}
+              disabled={isBusy}
               className="flex-1 min-h-[40px] max-h-[100px] resize-none py-2 px-3"
               rows={1}
             />
+            {isAudioSupported && (
+              <Button
+                onClick={handleRecordToggle}
+                disabled={!isRecording && (isStreaming || isTranscribing)}
+                size="icon"
+                variant={isRecording ? 'destructive' : 'outline'}
+                className="h-[40px] w-[40px] flex-shrink-0"
+                aria-label={isRecording ? '停止录音' : '开始录音'}
+              >
+                {isRecording ? (
+                  <Square className="h-4 w-4" />
+                ) : isTranscribing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mic className="h-4 w-4" />
+                )}
+              </Button>
+            )}
             <Button
               onClick={handleSend}
-              disabled={!input.trim() || isStreaming}
+              disabled={!input.trim() || isBusy}
               size="icon"
               className="h-[40px] w-[40px] flex-shrink-0"
             >
-              {isStreaming ? (
+              {isBusy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Send className="h-4 w-4" />
