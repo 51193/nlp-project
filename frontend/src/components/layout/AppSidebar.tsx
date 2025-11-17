@@ -39,7 +39,6 @@ import {
   FileText,
   Plus,
   Wrench,
-  ClipboardList,
 } from 'lucide-react'
 
 const navigation = [
@@ -60,7 +59,6 @@ const navigation = [
     title: 'Create',
     items: [
       { name: 'Podcasts', href: '/podcasts', icon: Mic },
-      { name: "Quizzes", href: "/quiz", icon: ClipboardList}
     ],
   },
   {
@@ -116,7 +114,7 @@ export function AppSidebar() {
             <div className="relative flex items-center justify-center w-full">
               <Image
                 src="/logo.svg"
-                alt="Open Notebook"
+                alt="SONA"
                 width={32}
                 height={32}
                 className="transition-opacity group-hover:opacity-0"
@@ -133,9 +131,9 @@ export function AppSidebar() {
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <Image src="/logo.svg" alt="Open Notebook" width={32} height={32} />
+                <Image src="/logo.svg" alt="SONA" width={32} height={32} />
                 <span className="text-base font-medium text-sidebar-foreground">
-                  Open Notebook
+                  SONA
                 </span>
               </div>
               <Button
