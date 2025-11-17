@@ -45,35 +45,35 @@
   --radius: 0.65rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
+  --card: oklch(1 0 0 / 85%); /* Increase the transparency of the card to allow the background to show through */
   --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
+  --popover: oklch(1 0 0 / 90%); /* Increase the transparency of the popover */
   --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.623 0.214 259.815);
+  --primary: oklch(0.513 0.24792 278.088);
   --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.967 0.001 286.375);
+  --secondary: oklch(0.967 0.001 286.375 / 90%);
   --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
+  --muted: oklch(0.967 0.001 286.375 / 90%);
   --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
+  --accent: oklch(0.967 0.001 286.375 / 90%);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.623 0.214 259.815);
+  --border: oklch(0.92 0.004 286.32 / 80%);
+  --input: oklch(0.92 0.004 286.32 / 80%);
+  --ring: oklch(0.513 0.24792 278.088);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: oklch(0.985 0 0 / 90%); /* Increase the transparency of the sidebar */
   --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.623 0.214 259.815);
+  --sidebar-primary: oklch(0.513 0.24792 278.088);
   --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
+  --sidebar-accent: oklch(0.967 0.001 286.375 / 90%);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.623 0.214 259.815);
+  --sidebar-border: oklch(0.92 0.004 286.32 / 80%);
+  --sidebar-ring: oklch(0.513 0.24792 278.088);
 }
 
 .dark {
@@ -83,7 +83,7 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.21 0.006 285.885);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.546 0.245 262.881);
+  --primary: oklch(0.505 0.28003 274.878);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
@@ -94,7 +94,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.488 0.243 264.376);
+  --ring: (0.505 0.28003 274.878);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -102,12 +102,12 @@
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.21 0.006 285.885);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
+  --sidebar-primary: oklch(0.505 0.28003 274.878);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.274 0.006 286.033);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.488 0.243 264.376);
+  --sidebar-ring: (0.505 0.28003 274.878);
 }
 
 @layer base {
@@ -119,17 +119,54 @@
     @apply antialiased;
   }
   
-  body {
-    @apply bg-background text-foreground transition-colors;
+
+  :root {
+    color-scheme: light;
   }
   
+  body {
+    @apply bg-background text-foreground transition-colors;
+    /* Use the default background color as a backup. */
+    background-color: var(--background);
+  }
+  
+  /* Apply background image in the light-colored theme */
+  body:not(.dark) {
+    background-image: url('/background.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    /* Create the opacity effect of the background image */
+    position: relative;
+  }
+  
+  /* Implement the opacity of the background image */
+  body:not(.dark)::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('/background.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    opacity: 0.2; /* 20% opacity */
+    z-index: -1; /* Make sure the background is presented after the main content. */
+    pointer-events: none; /* Not affect user interaction */
+  }
+  
+  /* Ensure that the content area has an appropriate background to make the text legible */
+  body:not(.dark) .app-content-area {
+    @apply bg-background/80 backdrop-blur-sm;
+  }
+
   /* Ensure proper theme inheritance for popovers and dropdowns */
   .dark {
     color-scheme: dark;
-  }
-  
-  :root {
-    color-scheme: light;
   }
   
   /* Ensure Radix UI components inherit theme properly */
@@ -150,9 +187,9 @@
     border-color: var(--sidebar-border);
   }
   
-  /* Enhanced hover effects for cards */
+  /* Apply blur effect */
   .card-hover {
-    @apply transition-all duration-200 cursor-pointer;
+    @apply transition-all duration-200 cursor-pointer backdrop-blur-sm;
   }
   
   .card-hover:hover {
@@ -160,6 +197,7 @@
     border-color: var(--border);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(8px);
   }
   
   .dark .card-hover:hover {
@@ -173,5 +211,10 @@
   
   .clickable-card * {
     cursor: pointer !important;
+  }
+  
+  /* Apply blur effect */
+  .main-content {
+    @apply backdrop-blur-sm;
   }
 }
