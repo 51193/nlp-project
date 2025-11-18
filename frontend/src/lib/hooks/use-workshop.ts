@@ -20,6 +20,7 @@ interface UseWorkshopOptions {
   notebookId: string
   autoStart?: boolean  // 自动启动轮询
   useStreaming?: boolean  // 使用SSE流式输出（默认true）
+  enabled?: boolean  // 是否启用workshop功能（默认true）
 }
 
 interface StreamingMessage {
@@ -32,7 +33,7 @@ interface StreamingMessage {
   tool_calls?: Array<Record<string, any>>  // ✅ 新增: 工具调用记录
 }
 
-export function useWorkshop({ notebookId, autoStart = true, useStreaming = true }: UseWorkshopOptions) {
+export function useWorkshop({ notebookId, autoStart = true, useStreaming = true, enabled = true }: UseWorkshopOptions) {
   const queryClient = useQueryClient()
 
   // -------------------- 状态管理 --------------------
@@ -53,7 +54,8 @@ export function useWorkshop({ notebookId, autoStart = true, useStreaming = true 
   } = useQuery({
     queryKey: ['workshop-templates'],
     queryFn: getTemplates,
-    staleTime: 5 * 60 * 1000  // 5分钟缓存
+    staleTime: 5 * 60 * 1000,  // 5分钟缓存
+    enabled: enabled  // 只有在enabled为true时才获取模板
   })
 
   // -------------------- 查询：笔记本会话列表 --------------------
@@ -64,7 +66,7 @@ export function useWorkshop({ notebookId, autoStart = true, useStreaming = true 
   } = useQuery({
     queryKey: ['workshop-sessions', notebookId],
     queryFn: () => getNotebookSessions(notebookId),
-    enabled: !!notebookId
+    enabled: enabled && !!notebookId  // 只有在enabled为true且notebookId存在时才获取会话
   })
 
   // -------------------- 查询：当前会话详情 --------------------
@@ -75,7 +77,7 @@ export function useWorkshop({ notebookId, autoStart = true, useStreaming = true 
   } = useQuery({
     queryKey: ['workshop-session', currentSessionId],
     queryFn: () => getSession(currentSessionId!),
-    enabled: !!currentSessionId && !isPolling,
+    enabled: enabled && !!currentSessionId && !isPolling,  // 只有在enabled为true、currentSessionId存在且不在轮询时才获取会话详情
     refetchInterval: false  // 手动控制轮询
   })
 

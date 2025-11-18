@@ -90,7 +90,8 @@ export function ChatPanel({
   // Initialize workshop hook (only if enabled)
   const workshop = useWorkshop({
     notebookId: notebookId || '',
-    autoStart: true
+    autoStart: true,
+    enabled: enableWorkshop  // 只有当enableWorkshop为true时才启用workshop功能
   })
 
   const handleReferenceClick = (type: string, id: string) => {
